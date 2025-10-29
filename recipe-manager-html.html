@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mes Recettes de Cuisine</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Lucide React icons as inline SVG components
+        const Plus = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+        );
+
+        const Trash2 = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+        );
+
+        const Edit2 = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+        );
+
+        const ChefHat = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+            </svg>
+        );
+
+        const Camera = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+        );
+
+        const Save = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+            </svg>
+        );
+
+        const X = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        );
+
+        const Book = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+        );
+
+        // Simple localStorage-based storage implementation
+        window.storage = {
+            get: async (key) => {
+                const value = localStorage.getItem(key);
+                if (value === null) throw new Error('Key not found');
+                return { key, value, shared: false };
+            },
+            set: async (key, value) => {
+                localStorage.setItem(key, value);
+                return { key, value, shared: false };
+            },
+            delete: async (key) => {
+                localStorage.removeItem(key);
+                return { key, deleted: true, shared: false };
+            },
+            list: async (prefix) => {
+                const keys = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (!prefix || key.startsWith(prefix)) {
+                        keys.push(key);
+                    }
+                }
+                return { keys, prefix, shared: false };
+            }
+        };
+
+        function RecipeManager() {
+            const [recipes, setRecipes] = useState([]);
+            const [currentView, setCurrentView] = useState('list');
+            const [editingRecipe, setEditingRecipe] = useState(null);
+            const [viewingRecipe, setViewingRecipe] = useState(null);
+
+            useEffect(() => {
+                loadRecipes();
+            }, []);
+
+            const loadRecipes = async () => {
+                try {
+                    const keys = await window.storage.list('recipe:');
+                    if (keys && keys.keys) {
+                        const loadedRecipes = [];
+                        for (const key of keys.keys) {
+                            try {
+                                const result = await window.storage.get(key);
+                                if (result && result.value) {
+                                    loadedRecipes.push(JSON.parse(result.value));
+                                }
+                            } catch (err) {
+                                console.log('Recipe not found:', key);
+                            }
+                        }
+                        setRecipes(loadedRecipes);
+                    }
+                } catch (error) {
+                    console.error('Error loading recipes:', error);
+                }
+            };
+
+            const saveRecipe = async (recipe) => {
+                try {
+                    const recipeToSave = {
+                        ...recipe,
+                        id: recipe.id || Date.now().toString(),
+                        updatedAt: new Date().toISOString()
+                    };
+                    
+                    await window.storage.set(`recipe:${recipeToSave.id}`, JSON.stringify(recipeToSave));
+                    await loadRecipes();
+                    setCurrentView('list');
+                    setEditingRecipe(null);
+                } catch (error) {
+                    console.error('Error saving recipe:', error);
+                    alert('Erreur lors de la sauvegarde');
+                }
+            };
+
+            const deleteRecipe = async (id) => {
+                if (confirm('Supprimer cette recette ?')) {
+                    try {
+                        await window.storage.delete(`recipe:${id}`);
+                        await loadRecipes();
+                    } catch (error) {
+                        console.error('Error deleting recipe:', error);
+                    }
+                }
+            };
+
+            const startNewRecipe = () => {
+                setEditingRecipe({
+                    name: '',
+                    description: '',
+                    ingredients: [''],
+                    steps: [{ text: '', image: '' }]
+                });
+                setCurrentView('edit');
+            };
+
+            const startEditRecipe = (recipe) => {
+                setEditingRecipe({ ...recipe });
+                setCurrentView('edit');
+            };
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50">
+                    <div className="max-w-6xl mx-auto p-6">
+                        <header className="mb-8 text-center">
+                            <div className="flex items-center justify-center gap-3 mb-2">
+                                <ChefHat className="w-12 h-12 text-orange-600" />
+                                <h1 className="text-4xl font-bold text-gray-800">Mes Recettes</h1>
+                            </div>
+                            <p className="text-gray-600">Ton carnet de cuisine personnel</p>
+                        </header>
+
+                        {currentView === 'list' && (
+                            <RecipeList 
+                                recipes={recipes}
+                                onNew={startNewRecipe}
+                                onEdit={startEditRecipe}
+                                onDelete={deleteRecipe}
+                                onView={(recipe) => {
+                                    setViewingRecipe(recipe);
+                                    setCurrentView('view');
+                                }}
+                            />
+                        )}
+
+                        {currentView === 'edit' && (
+                            <RecipeEditor
+                                recipe={editingRecipe}
+                                onSave={saveRecipe}
+                                onCancel={() => {
+                                    setCurrentView('list');
+                                    setEditingRecipe(null);
+                                }}
+                                onChange={setEditingRecipe}
+                            />
+                        )}
+
+                        {currentView === 'view' && (
+                            <RecipeViewer
+                                recipe={viewingRecipe}
+                                onBack={() => {
+                                    setCurrentView('list');
+                                    setViewingRecipe(null);
+                                }}
+                                onEdit={() => {
+                                    startEditRecipe(viewingRecipe);
+                                }}
+                            />
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function RecipeList({ recipes, onNew, onEdit, onDelete, onView }) {
+            return (
+                <div>
+                    <div className="mb-6">
+                        <button
+                            onClick={onNew}
+                            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-4 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all"
+                        >
+                            <Plus className="w-6 h-6" />
+                            Nouvelle Recette
+                        </button>
+                    </div>
+
+                    {recipes.length === 0 ? (
+                        <div className="text-center py-16 bg-white rounded-xl shadow-sm">
+                            <Book className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                            <p className="text-gray-500 text-lg">Aucune recette pour l'instant</p>
+                            <p className="text-gray-400">Clique sur "Nouvelle Recette" pour commencer !</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {recipes.map((recipe) => (
+                                <div
+                                    key={recipe.id}
+                                    className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all cursor-pointer"
+                                    onClick={() => onView(recipe)}
+                                >
+                                    {recipe.steps[0]?.image && (
+                                        <img
+                                            src={recipe.steps[0].image}
+                                            alt={recipe.name}
+                                            className="w-full h-48 object-cover"
+                                        />
+                                    )}
+                                    <div className="p-5">
+                                        <h3 className="text-xl font-bold text-gray-800 mb-2">{recipe.name}</h3>
+                                        <p className="text-gray-600 text-sm mb-4 line-clamp-2">{recipe.description}</p>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onEdit(recipe);
+                                                }}
+                                                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-all"
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                                Modifier
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onDelete(recipe.id);
+                                                }}
+                                                className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg transition-all"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function RecipeEditor({ recipe, onSave, onCancel, onChange }) {
+            const handleImageUpload = (index, e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const newSteps = [...recipe.steps];
+                        newSteps[index].image = reader.result;
+                        onChange({ ...recipe, steps: newSteps });
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const addIngredient = () => {
+                onChange({ ...recipe, ingredients: [...recipe.ingredients, ''] });
+            };
+
+            const removeIngredient = (index) => {
+                onChange({ ...recipe, ingredients: recipe.ingredients.filter((_, i) => i !== index) });
+            };
+
+            const updateIngredient = (index, value) => {
+                const newIngredients = [...recipe.ingredients];
+                newIngredients[index] = value;
+                onChange({ ...recipe, ingredients: newIngredients });
+            };
+
+            const addStep = () => {
+                onChange({ ...recipe, steps: [...recipe.steps, { text: '', image: '' }] });
+            };
+
+            const removeStep = (index) => {
+                onChange({ ...recipe, steps: recipe.steps.filter((_, i) => i !== index) });
+            };
+
+            const updateStep = (index, field, value) => {
+                const newSteps = [...recipe.steps];
+                newSteps[index][field] = value;
+                onChange({ ...recipe, steps: newSteps });
+            };
+
+            return (
+                <div className="bg-white rounded-xl shadow-lg p-8">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-800">
+                            {recipe.id ? 'Modifier la recette' : 'Nouvelle recette'}
+                        </h2>
+                        <button onClick={onCancel} className="text-gray-500 hover:text-gray-700">
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+
+                    <div className="space-y-6">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Nom de la recette</label>
+                            <input
+                                type="text"
+                                value={recipe.name}
+                                onChange={(e) => onChange({ ...recipe, name: e.target.value })}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                placeholder="Ex: Tarte aux pommes"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                            <textarea
+                                value={recipe.description}
+                                onChange={(e) => onChange({ ...recipe, description: e.target.value })}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                rows="3"
+                                placeholder="Courte description de ta recette..."
+                            />
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between items-center mb-3">
+                                <label className="text-sm font-semibold text-gray-700">Ingrédients</label>
+                                <button
+                                    onClick={addIngredient}
+                                    className="text-orange-600 hover:text-orange-700 font-medium text-sm flex items-center gap-1"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Ajouter
+                                </button>
+                            </div>
+                            <div className="space-y-2">
+                                {recipe.ingredients.map((ingredient, index) => (
+                                    <div key={index} className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={ingredient}
+                                            onChange={(e) => updateIngredient(index, e.target.value)}
+                                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                            placeholder="Ex: 200g de farine"
+                                        />
+                                        <button
+                                            onClick={() => removeIngredient(index)}
+                                            className="text-red-500 hover:text-red-600 px-3"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between items-center mb-3">
+                                <label className="text-sm font-semibold text-gray-700">Étapes de préparation</label>
+                                <button
+                                    onClick={addStep}
+                                    className="text-orange-600 hover:text-orange-700 font-medium text-sm flex items-center gap-1"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Ajouter une étape
+                                </button>
+                            </div>
+                            <div className="space-y-4">
+                                {recipe.steps.map((step, index) => (
+                                    <div key={index} className="border border-gray-200 rounded-lg p-4">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className="font-semibold text-gray-700">Étape {index + 1}</span>
+                                            <button
+                                                onClick={() => removeStep(index)}
+                                                className="text-red-500 hover:text-red-600"
+                                            >
+                                                <Trash2 className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                        
+                                        <textarea
+                                            value={step.text}
+                                            onChange={(e) => updateStep(index, 'text', e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent mb-3"
+                                            rows="3"
+                                            placeholder="Décris cette étape..."
+                                        />
+
+                                        <div className="flex items-center gap-3">
+                                            <label className="flex-1 cursor-pointer">
+                                                <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all">
+                                                    <Camera className="w-5 h-5 text-gray-600" />
+                                                    <span className="text-sm text-gray-700">
+                                                        {step.image ? 'Changer la photo' : 'Ajouter une photo'}
+                                                    </span>
+                                                </div>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => handleImageUpload(index, e)}
+                                                    className="hidden"
+                                                />
+                                            </label>
+                                            {step.image && (
+                                                <button
+                                                    onClick={() => updateStep(index, 'image', '')}
+                                                    className="text-red-500 hover:text-red-600"
+                                                >
+                                                    Supprimer
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {step.image && (
+                                            <img
+                                                src={step.image}
+                                                alt={`Étape ${index + 1}`}
+                                                className="mt-3 w-full h-48 object-cover rounded-lg"
+                                            />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
+                            <button
+                                onClick={() => onSave(recipe)}
+                                className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-all"
+                            >
+                                <Save className="w-5 h-5" />
+                                Enregistrer
+                            </button>
+                            <button
+                                onClick={onCancel}
+                                className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-all"
+                            >
+                                Annuler
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function RecipeViewer({ recipe, onBack, onEdit }) {
+            return (
+                <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                    {recipe.steps[0]?.image && (
+                        <img
+                            src={recipe.steps[0].image}
+                            alt={recipe.name}
+                            className="w-full h-80 object-cover"
+                        />
+                    )}
+                    
+                    <div className="p-8">
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <h2 className="text-3xl font-bold text-gray-800 mb-2">{recipe.name}</h2>
+                                <p className="text-gray-600">{recipe.description}</p>
+                            </div>
+                            <button
+                                onClick={onEdit}
+                                className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg flex items-center gap-2 transition-all"
+                            >
+                                <Edit2 className="w-4 h-4" />
+                                Modifier
+                            </button>
+                        </div>
+
+                        <div className="mb-8">
+                            <h3 className="text-xl font-bold text-gray-800 mb-4">Ingrédients</h3>
+                            <ul className="space-y-2">
+                                {recipe.ingredients.map((ingredient, index) => (
+                                    <li key={index} className="flex items-start gap-3">
+                                        <span className="text-orange-600 mt-1">•</span>
+                                        <span className="text-gray-700">{ingredient}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        <div className="mb-8">
+                            <h3 className="text-xl font-bold text-gray-800 mb-4">Préparation</h3>
+                            <div className="space-y-6">
+                                {recipe.steps.map((step, index) => (
+                                    <div key={index} className="border-l-4 border-orange-500 pl-6">
+                                        <div className="font-semibold text-gray-800 mb-2">Étape {index + 1}</div>
+                                        <p className="text-gray-700 mb-3">{step.text}</p>
+                                        {step.image && (
+                                            <img
+                                                src={step.image}
+                                                alt={`Étape ${index + 1}`}
+                                                className="w-full max-w-md h-64 object-cover rounded-lg shadow-md"
+                                            />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={onBack}
+                            className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-lg transition-all"
+                        >
+                            Retour aux recettes
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // Render the app
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<RecipeManager />);
+    </script>
+</body>
+</html>
